@@ -283,6 +283,7 @@ class OBDSimulator(QWidget):
                 border: 1px solid #4C566A;
                 padding: 10px;
                 border-radius: 5px;
+                                          min-height: 300px;
             }
         """)
         main_layout.addWidget(QLabel("OBD-II Data:"))
