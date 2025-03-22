@@ -1,38 +1,50 @@
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox, QTextEdit, QSlider, QGroupBox, QScrollArea
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox, QTextEdit, QSlider, QGroupBox, QScrollArea, QFileDialog
 )
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtGui import QFont
 import random
 import sys
+import csv
+from datetime import datetime
 
-# Sample Data with Additional Fault Codes
+# Sample Data
 Faults = {
+    # Existing Faults
     "P0217 - Engine Over Temperature": ["Engine Overheating", "Coolant Leak", "Radiator Fan Failure"],
     "P0128 - Coolant Thermostat Malfunction": ["Thermostat Stuck Open", "Engine Overheating"],
     "P0087 - Fuel Rail/System Pressure Too Low": ["Low Fuel Pressure", "Fuel Pump Failure"],
     "P0193 - Fuel Rail Pressure Sensor High Input": ["Fuel Pressure Sensor Fault"],
     "P0300 - Random/Multiple Cylinder Misfire Detected": ["Random/Multiple Misfire", "Ignition Coil Failure"],
-    "P0135 - O2 Sensor Heater Circuit Malfunction (Bank 1 Sensor 1)": ["O2 Sensor Malfunction"],
-    "P0420 - Catalyst System Efficiency Below Threshold (Bank 1)": ["Catalyst Efficiency Below Threshold"],
-    "P0401 - Exhaust Gas Recirculation Flow Insufficient Detected": ["EGR Flow Insufficient"],
-    "P0171 - System Too Lean (Bank 1)": ["System Too Lean"],
-    "P0172 - System Too Rich (Bank 1)": ["System Too Rich"],
-    "P0455 - Evaporative Emission System Leak Detected (Gross Leak)": ["Evaporative Emission System Leak"],
-    "P0700 - Transmission Control System Malfunction": ["Transmission Overheating"],
-    "P0460 - Fuel Level Sensor Circuit Malfunction": ["Low Fuel Level"],
-    "P0113 - Intake Air Temperature Circuit High Input": ["Ambient Air Temperature Sensor Fault"],
-    "P0520 - Engine Oil Pressure Sensor/Switch Circuit Malfunction": ["Oil Pressure Out of Range"],
-    "P0570 - Brake Pedal Position Sensor Circuit Malfunction": ["Brake Pedal Position Out of Range"],
-    "P1600 - Steering Angle Sensor Circuit Malfunction": ["Steering Angle Out of Range"],
-    "P1601 - Tire Pressure Sensor Circuit Malfunction": ["Tire Pressure Out of Range"],
-    "P1602 - Alternator Output Circuit Malfunction": ["Alternator Output Out of Range"],
-    "P1603 - Fuel Injector Pulse Width Out of Range": ["Fuel Injector Pulse Width Out of Range"],
-    "P1604 - Knock Sensor Voltage Out of Range": ["Knock Sensor Voltage Out of Range"],
-    "P1605 - Wheel Speed Sensor Circuit Malfunction": ["Wheel Speed Out of Range"],
-    "P1606 - Clutch Pedal Position Sensor Circuit Malfunction": ["Clutch Pedal Position Out of Range"],
-    "P1607 - Exhaust Gas Temperature Sensor Circuit Malfunction": ["Exhaust Gas Temperature Out of Range"],
     "No Faults Detected": ["Normal Driving"],
+
+    # New Faults (25 Additional Fault Codes)
+    "P0171 - System Too Lean (Bank 1)": ["Vacuum Leak", "Faulty Oxygen Sensor", "Fuel Injector Issue"],
+    "P0172 - System Too Rich (Bank 1)": ["Faulty Oxygen Sensor", "Fuel Pressure Regulator Issue", "Clogged Air Filter"],
+    "P0174 - System Too Lean (Bank 2)": ["Vacuum Leak", "Faulty Oxygen Sensor", "Fuel Injector Issue"],
+    "P0175 - System Too Rich (Bank 2)": ["Faulty Oxygen Sensor", "Fuel Pressure Regulator Issue", "Clogged Air Filter"],
+    "P0201 - Injector Circuit Malfunction (Cylinder 1)": ["Faulty Fuel Injector", "Wiring Issue"],
+    "P0202 - Injector Circuit Malfunction (Cylinder 2)": ["Faulty Fuel Injector", "Wiring Issue"],
+    "P0203 - Injector Circuit Malfunction (Cylinder 3)": ["Faulty Fuel Injector", "Wiring Issue"],
+    "P0204 - Injector Circuit Malfunction (Cylinder 4)": ["Faulty Fuel Injector", "Wiring Issue"],
+    "P0301 - Cylinder 1 Misfire Detected": ["Ignition Coil Failure", "Spark Plug Issue"],
+    "P0302 - Cylinder 2 Misfire Detected": ["Ignition Coil Failure", "Spark Plug Issue"],
+    "P0303 - Cylinder 3 Misfire Detected": ["Ignition Coil Failure", "Spark Plug Issue"],
+    "P0304 - Cylinder 4 Misfire Detected": ["Ignition Coil Failure", "Spark Plug Issue"],
+    "P0401 - Exhaust Gas Recirculation Flow Insufficient": ["Clogged EGR Valve", "Faulty EGR Sensor"],
+    "P0402 - Exhaust Gas Recirculation Flow Excessive": ["Stuck EGR Valve", "Faulty EGR Sensor"],
+    "P0420 - Catalyst System Efficiency Below Threshold (Bank 1)": ["Faulty Catalytic Converter", "Oxygen Sensor Issue"],
+    "P0430 - Catalyst System Efficiency Below Threshold (Bank 2)": ["Faulty Catalytic Converter", "Oxygen Sensor Issue"],
+    "P0442 - Evaporative Emission Control System Leak Detected (Small Leak)": ["Loose Gas Cap", "Leaking EVAP Hose"],
+    "P0446 - Evaporative Emission Control System Vent Control Circuit Malfunction": ["Faulty EVAP Vent Valve", "Wiring Issue"],
+    "P0507 - Idle Air Control System RPM Higher Than Expected": ["Dirty Throttle Body", "Faulty Idle Air Control Valve"],
+    "P0606 - ECM/PCM Processor Fault": ["Faulty Engine Control Module", "Software Glitch"],
+    "P0700 - Transmission Control System Malfunction": ["Faulty Transmission Control Module", "Wiring Issue"],
+    "P0715 - Input/Turbine Speed Sensor Circuit Malfunction": ["Faulty Speed Sensor", "Wiring Issue"],
+    "P0720 - Output Speed Sensor Circuit Malfunction": ["Faulty Speed Sensor", "Wiring Issue"],
+    "P0741 - Torque Converter Clutch Circuit Performance or Stuck Off": ["Faulty Torque Converter", "Transmission Fluid Issue"],
+    "P0750 - Shift Solenoid A Malfunction": ["Faulty Shift Solenoid", "Wiring Issue"],
+    "P0775 - Pressure Control Solenoid B Malfunction": ["Faulty Pressure Control Solenoid", "Wiring Issue"],
 }
 
 DrivingScenarios = {
@@ -54,14 +66,16 @@ class OBDSimulator(QWidget):
         self.brake_applied = False
         self.speed = 0
         self.selected_scenario = "City Road"
+        self.data_log = []  # To store collected data for saving
+        self.previous_coolant_temp = self.sensor_data["Coolant Temp (°C)"]  # For rate of change calculation
 
     def initUI(self):
-        self.setWindowTitle("Enhanced OBD-II Simulator (Dark Theme)")
+        self.setWindowTitle("Dynamic OBD-II Simulator")
         self.setGeometry(100, 100, 800, 600)
 
         # Create a scroll area
         scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)  # Allow the widget to resize
+        scroll_area.setWidgetResizable(True)
 
         # Create a container widget for the main layout
         container = QWidget()
@@ -71,7 +85,7 @@ class OBDSimulator(QWidget):
         main_layout = QVBoxLayout(container)
 
         # Title
-        title = QLabel("Enhanced OBD-II Diagnostic Simulator")
+        title = QLabel("OBD-II Diagnostic Simulator")
         title.setFont(QFont("Arial", 18, QFont.Weight.Bold))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setStyleSheet("color: #88C0D0;")
@@ -283,7 +297,7 @@ class OBDSimulator(QWidget):
                 border: 1px solid #4C566A;
                 padding: 10px;
                 border-radius: 5px;
-                                          min-height: 300px;
+                min-height: 300px;
             }
         """)
         main_layout.addWidget(QLabel("OBD-II Data:"))
@@ -326,6 +340,24 @@ class OBDSimulator(QWidget):
         self.stop_sim_button.setEnabled(False)
         sim_controls_layout.addWidget(self.stop_sim_button)
 
+        # Save Data Button
+        self.save_button = QPushButton("Save Data to CSV")
+        self.save_button.setFont(QFont("Arial", 12))
+        self.save_button.setStyleSheet("""
+            QPushButton {
+                background-color: #5E81AC;
+                color: #ECEFF4;
+                border: none;
+                padding: 10px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #81A1C1;
+            }
+        """)
+        self.save_button.clicked.connect(self.save_data_to_csv)
+        sim_controls_layout.addWidget(self.save_button)
+
         main_layout.addLayout(sim_controls_layout)
 
         # Set the scroll area as the main widget
@@ -335,58 +367,68 @@ class OBDSimulator(QWidget):
         self.update_situations()
 
     def generate_initial_data(self):
-        """Generate initial sensor data"""
+        """Generate initial sensor data with realistic base values"""
         return {
-            "Engine RPM": 0,
-            "Coolant Temp (°C)": random.randint(70, 120),
-            "Fuel Pressure (kPa)": random.randint(200, 4000),
-            "O2 Sensor Voltage (V)": round(random.uniform(0.1, 0.9), 2),
-            "Catalyst Temp (°C)": random.randint(400, 800),
-            "EGR Flow (%)": round(random.uniform(0, 20), 2),
-            "Short Term Fuel Trim (%)": round(random.uniform(-10, 10), 2),
-            "Long Term Fuel Trim (%)": round(random.uniform(-5, 5), 2),
-            "Evap System Vapor Pressure (kPa)": round(random.uniform(-5, 5), 2),
-            "Transmission Temp (°C)": random.randint(70, 110),
-            "Fuel Level (%)": round(random.uniform(0, 100), 2),
-            "Ambient Air Temp (°C)": random.randint(-20, 40),  # Realistic range
-            "Oil Pressure (psi)": round(random.uniform(20, 60), 2),
-            "Brake Pedal Position (%)": 0,
-            "Steering Angle (°)": round(random.uniform(-180, 180), 2),
-            "Tire Pressure (psi)": round(random.uniform(28, 35), 2),
-            "Alternator Output (V)": round(random.uniform(13, 15), 2),
-            "Fuel Injector Pulse Width (ms)": round(random.uniform(1, 10), 2),
-            "Knock Sensor Voltage (V)": round(random.uniform(0, 5), 2),
-            "Wheel Speed (km/h)": 0,
-            "Clutch Pedal Position (%)": 0,
-            "Exhaust Gas Temp (°C)": random.randint(200, 1000),
+            "Engine RPM": 700,  # Idle RPM
+            "Coolant Temp (°C)": 90,  # Normal operating temperature
+            "Fuel Pressure (kPa)": 3000,  # Typical fuel pressure
+            "O2 Sensor Voltage (V)": 0.45,  # Ideal O2 sensor voltage
+            "Catalyst Temp (°C)": 500,  # Normal catalyst temperature
+            "EGR Flow (%)": 10,  # Moderate EGR flow
+            "Short Term Fuel Trim (%)": 0,  # Ideal fuel trim
+            "Long Term Fuel Trim (%)": 0,  # Ideal fuel trim
+            "Evap System Vapor Pressure (kPa)": -0.5,  # Slight vacuum
+            "Transmission Temp (°C)": 85,  # Normal transmission temperature
+            "Fuel Level (%)": 80,  # Partially full fuel tank
+            "Ambient Air Temp (°C)": 25,  # Moderate ambient temperature
+            "Oil Pressure (psi)": 40,  # Healthy oil pressure
+            "Brake Pedal Position (%)": 0,  # Brake pedal released
+            "Steering Angle (°)": 0,  # Straight steering
+            "Tire Pressure (psi)": 32,  # Normal tire pressure
+            "Alternator Output (V)": 14,  # Ideal alternator output
+            "Fuel Injector Pulse Width (ms)": 3,  # Normal injector pulse width
+            "Knock Sensor Voltage (V)": 0.2,  # Low knock sensor voltage
+            "Wheel Speed (km/h)": 0,  # Stationary
+            "Clutch Pedal Position (%)": 0,  # Clutch pedal released
+            "Exhaust Gas Temp (°C)": 400,  # Normal exhaust temperature
             "Fault Code": "No Faults Detected"
         }
 
     def update_sensor_data(self):
-        """Update sensor data dynamically"""
+        """Update sensor data dynamically with realistic constraints"""
         selected_fault = self.fault_select.currentText()
         selected_situation = self.situation_select.currentText()
         self.sensor_data["Fault Code"] = selected_fault
 
-        # Simulate small random changes in sensor values
-        for key in self.sensor_data:
-            if key == "Fault Code":
-                continue
-            if key == "Ambient Air Temp (°C)":
-                # Ensure ambient temperature stays within a realistic range
-                self.sensor_data[key] += random.randint(-1, 1)  # Small fluctuations
-                self.sensor_data[key] = max(-20, min(40, self.sensor_data[key]))  # Clamp to range
-            elif isinstance(self.sensor_data[key], int):
-                self.sensor_data[key] += random.randint(-10, 10)
-            elif isinstance(self.sensor_data[key], float):
-                self.sensor_data[key] += round(random.uniform(-0.5, 0.5), 2)
+        # Apply fault code effects
+        if selected_fault == "P0217 - Engine Over Temperature":
+            self.sensor_data["Coolant Temp (°C)"] = random.randint(110, 120)  # Overheating
+        elif selected_fault == "P0087 - Fuel Rail/System Pressure Too Low":
+            self.sensor_data["Fuel Pressure (kPa)"] = random.randint(200, 500)  # Low fuel pressure
+        elif selected_fault == "P0300 - Random/Multiple Cylinder Misfire Detected":
+            self.sensor_data["Engine RPM"] += random.randint(-100, 100)  # RPM fluctuations
+        elif selected_fault == "P0171 - System Too Lean (Bank 1)":
+            self.sensor_data["O2 Sensor Voltage (V)"] = round(random.uniform(0.1, 0.3), 2)  # Lean condition
+        elif selected_fault == "P0172 - System Too Rich (Bank 1)":
+            self.sensor_data["O2 Sensor Voltage (V)"] = round(random.uniform(0.7, 0.9), 2)  # Rich condition
+
+        # Apply driving scenario effects
+        if self.selected_scenario == "City Road":
+            self.sensor_data["Engine RPM"] = random.randint(600, 3000)
+            self.sensor_data["Wheel Speed (km/h)"] = random.randint(0, 60)
+        elif self.selected_scenario == "Highway":
+            self.sensor_data["Engine RPM"] = random.randint(2000, 4000)
+            self.sensor_data["Wheel Speed (km/h)"] = random.randint(60, 120)
+        elif self.selected_scenario == "Off-Road":
+            self.sensor_data["Engine RPM"] = random.randint(1000, 3500)
+            self.sensor_data["Wheel Speed (km/h)"] = random.randint(0, 40)
 
         # Apply car state adjustments
         if self.car_on:
             # Car is on: simulate normal operation
             self.sensor_data["Engine RPM"] = max(600, min(5000, self.sensor_data["Engine RPM"]))
             self.sensor_data["Wheel Speed (km/h)"] = self.speed
-            self.sensor_data["Fuel Pressure (kPa)"] = random.randint(200, 4000)
+            self.sensor_data["Fuel Pressure (kPa)"] = random.randint(2000, 4000)
             self.sensor_data["O2 Sensor Voltage (V)"] = round(random.uniform(0.1, 0.9), 2)
         else:
             # Car is off: set engine RPM, wheel speed, and fuel pressure to zero
@@ -422,10 +464,18 @@ class OBDSimulator(QWidget):
         self.sensor_data["Knock Sensor Voltage (V)"] = max(0, min(5, self.sensor_data["Knock Sensor Voltage (V)"]))
         self.sensor_data["Clutch Pedal Position (%)"] = max(0, min(100, self.sensor_data["Clutch Pedal Position (%)"]))
         self.sensor_data["Exhaust Gas Temp (°C)"] = max(200, min(1000, self.sensor_data["Exhaust Gas Temp (°C)"]))
+        self.sensor_data["Fault Code"] = selected_fault
 
         # Update the display
         display_text = "\n".join([f"{key}: {value}" for key, value in self.sensor_data.items()])
         self.result_display.setText(display_text)
+
+        # Log data for saving
+        self.data_log.append({
+            **self.sensor_data,
+            "Fault Description": self.situation_select.currentText(),
+            "Fault Code": self.fault_select.currentText()
+        })
 
     def update_situations(self):
         """Update the list of possible situations based on the selected fault"""
@@ -484,6 +534,28 @@ class OBDSimulator(QWidget):
             self.is_running = False
             self.start_sim_button.setEnabled(True)
             self.stop_sim_button.setEnabled(False)
+
+    def save_data_to_csv(self):
+        """Save collected data to a CSV file"""
+        if not self.data_log:
+            print("No data to save.")
+            return
+
+        # Open file dialog to choose save location
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save Data", "", "CSV Files (*.csv)")
+        if not file_path:
+            return
+
+        # Define CSV columns
+        columns = list(self.data_log[0].keys())
+
+        # Write data to CSV
+        with open(file_path, mode="w", newline="") as file:
+            writer = csv.DictWriter(file, fieldnames=columns)
+            writer.writeheader()
+            writer.writerows(self.data_log)
+
+        print(f"Data saved to {file_path}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
