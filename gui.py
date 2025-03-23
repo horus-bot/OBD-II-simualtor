@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox, QTextEdit, QSlider, QGroupBox, QScrollArea, QFileDialog
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox, QTextEdit, QSlider, QGroupBox, QScrollArea
 )
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtGui import QFont
@@ -7,6 +7,7 @@ import random
 import sys
 import csv
 from datetime import datetime
+import os  # Import os module for file existence check
 
 # Sample Data
 Faults = {
@@ -385,12 +386,14 @@ class OBDSimulator(QWidget):
             "Brake Pedal Position (%)": 0,  # Brake pedal released
             "Steering Angle (°)": 0,  # Straight steering
             "Tire Pressure (psi)": 32,  # Normal tire pressure
-            "Alternator Output (V)": 14,  # Ideal alternator output
+            "Alternator Output (V)": 14.0,  # Ideal alternator output
             "Fuel Injector Pulse Width (ms)": 3,  # Normal injector pulse width
             "Knock Sensor Voltage (V)": 0.2,  # Low knock sensor voltage
             "Wheel Speed (km/h)": 0,  # Stationary
             "Clutch Pedal Position (%)": 0,  # Clutch pedal released
             "Exhaust Gas Temp (°C)": 400,  # Normal exhaust temperature
+            "Battery Voltage (V)": 12.5,  # Normal battery voltage
+            "Electrical Load (A)": 20,  # Normal electrical load
             "Fault Code": "No Faults Detected"
         }
 
@@ -430,15 +433,26 @@ class OBDSimulator(QWidget):
             self.sensor_data["Wheel Speed (km/h)"] = self.speed
             self.sensor_data["Fuel Pressure (kPa)"] = random.randint(2000, 4000)
             self.sensor_data["O2 Sensor Voltage (V)"] = round(random.uniform(0.1, 0.9), 2)
+
+            # Simulate electrical and voltage levels
+            self.sensor_data["Battery Voltage (V)"] = round(random.uniform(12.5, 14.5), 2)  # Normal range
+            self.sensor_data["Alternator Output (V)"] = round(random.uniform(13.5, 14.5), 2)  # Normal range
+            self.sensor_data["Electrical Load (A)"] = random.randint(20, 50)  # Normal load
         else:
             # Car is off: set engine RPM, wheel speed, and fuel pressure to zero
             self.sensor_data["Engine RPM"] = 0
             self.sensor_data["Wheel Speed (km/h)"] = 0
             self.sensor_data["Fuel Pressure (kPa)"] = 0
 
+            # Simulate electrical and voltage levels when car is off
+            self.sensor_data["Battery Voltage (V)"] = round(random.uniform(12.0, 12.5), 2)  # Lower voltage
+            self.sensor_data["Alternator Output (V)"] = 0  # Alternator not running
+            self.sensor_data["Electrical Load (A)"] = 0  # No electrical load
+
         # Apply AC state adjustments
         if self.ac_on:
             self.sensor_data["Alternator Output (V)"] = max(13, min(15, self.sensor_data["Alternator Output (V)"]))
+            self.sensor_data["Electrical Load (A)"] += 10  # Increased load due to AC
         else:
             self.sensor_data["Alternator Output (V)"] = random.uniform(12.5, 13.5)
 
@@ -470,9 +484,10 @@ class OBDSimulator(QWidget):
         display_text = "\n".join([f"{key}: {value}" for key, value in self.sensor_data.items()])
         self.result_display.setText(display_text)
 
-        # Log data for saving
+        # Log data for saving (with timestamp)
         self.data_log.append({
             **self.sensor_data,
+            "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),  # Add timestamp here
             "Fault Description": self.situation_select.currentText(),
             "Fault Code": self.fault_select.currentText()
         })
@@ -536,26 +551,87 @@ class OBDSimulator(QWidget):
             self.stop_sim_button.setEnabled(False)
 
     def save_data_to_csv(self):
-        """Save collected data to a CSV file"""
+        """Save collected data to the specified CSV file, appending new records if the file exists."""
         if not self.data_log:
             print("No data to save.")
             return
 
-        # Open file dialog to choose save location
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save Data", "", "CSV Files (*.csv)")
-        if not file_path:
-            return
+        # Fixed file path
+        file_path = r"C:\Users\lenovo\Desktop\simulator\obd-II_data.csv"
 
-        # Define CSV columns
-        columns = list(self.data_log[0].keys())
+        # Define CSV columns based on the provided format
+        columns = [
+            "Timestamp", "Engine RPM", "Coolant Temp (°C)", "Fuel Pressure (kPa)", "O2 Sensor Voltage (V)",
+            "Catalyst Temp (°C)", "EGR Flow (%)", "Short Term Fuel Trim (%)", "Long Term Fuel Trim (%)",
+            "Evap System Vapor Pressure (kPa)", "Transmission Temp (°C)", "Fuel Level (%)", "Ambient Air Temp (°C)",
+            "Oil Pressure (psi)", "Brake Pedal Position (%)", "Steering Angle (°)", "Tire Pressure (psi)",
+            "Alternator Output (V)", "Fuel Injector Pulse Width (ms)", "Knock Sensor Voltage (V)", "Wheel Speed (km/h)",
+            "Clutch Pedal Position (%)", "Exhaust Gas Temp (°C)", "Road Conditions", "Weather", "Traffic Conditions",
+            "Vehicle Load", "Time Since Last Maintenance (days)", "Coolant Temp Rate of Change (°C/min)",
+            "Fuel Trim Stability", "Battery Health Indicator", "Transmission Temp Anomaly Score",
+            "Excessive Engine Load Detection", "Fault Code", "Fault Description", "Severity Level", "Recommended Fix"
+        ]
+
+        # Prepare data for CSV
+        csv_data = []
+        for entry in self.data_log:
+            csv_row = {
+                "Timestamp": entry.get("Timestamp", ""),  # Use the timestamp from the log entry
+                "Engine RPM": entry.get("Engine RPM", ""),
+                "Coolant Temp (°C)": entry.get("Coolant Temp (°C)", ""),
+                "Fuel Pressure (kPa)": entry.get("Fuel Pressure (kPa)", ""),
+                "O2 Sensor Voltage (V)": entry.get("O2 Sensor Voltage (V)", ""),
+                "Catalyst Temp (°C)": entry.get("Catalyst Temp (°C)", ""),
+                "EGR Flow (%)": entry.get("EGR Flow (%)", ""),
+                "Short Term Fuel Trim (%)": entry.get("Short Term Fuel Trim (%)", ""),
+                "Long Term Fuel Trim (%)": entry.get("Long Term Fuel Trim (%)", ""),
+                "Evap System Vapor Pressure (kPa)": entry.get("Evap System Vapor Pressure (kPa)", ""),
+                "Transmission Temp (°C)": entry.get("Transmission Temp (°C)", ""),
+                "Fuel Level (%)": entry.get("Fuel Level (%)", ""),
+                "Ambient Air Temp (°C)": entry.get("Ambient Air Temp (°C)", ""),
+                "Oil Pressure (psi)": entry.get("Oil Pressure (psi)", ""),
+                "Brake Pedal Position (%)": entry.get("Brake Pedal Position (%)", ""),
+                "Steering Angle (°)": entry.get("Steering Angle (°)", ""),
+                "Tire Pressure (psi)": entry.get("Tire Pressure (psi)", ""),
+                "Alternator Output (V)": entry.get("Alternator Output (V)", ""),
+                "Fuel Injector Pulse Width (ms)": entry.get("Fuel Injector Pulse Width (ms)", ""),
+                "Knock Sensor Voltage (V)": entry.get("Knock Sensor Voltage (V)", ""),
+                "Wheel Speed (km/h)": entry.get("Wheel Speed (km/h)", ""),
+                "Clutch Pedal Position (%)": entry.get("Clutch Pedal Position (%)", ""),
+                "Exhaust Gas Temp (°C)": entry.get("Exhaust Gas Temp (°C)", ""),
+                "Road Conditions": "",  # Placeholder for future implementation
+                "Weather": "",  # Placeholder for future implementation
+                "Traffic Conditions": "",  # Placeholder for future implementation
+                "Vehicle Load": "",  # Placeholder for future implementation
+                "Time Since Last Maintenance (days)": "",  # Placeholder for future implementation
+                "Coolant Temp Rate of Change (°C/min)": "",  # Placeholder for future implementation
+                "Fuel Trim Stability": "",  # Placeholder for future implementation
+                "Battery Health Indicator": "",  # Placeholder for future implementation
+                "Transmission Temp Anomaly Score": "",  # Placeholder for future implementation
+                "Excessive Engine Load Detection": "",  # Placeholder for future implementation
+                "Fault Code": entry.get("Fault Code", ""),
+                "Fault Description": entry.get("Fault Description", ""),
+                "Severity Level": "",  # Placeholder for future implementation
+                "Recommended Fix": ""  # Placeholder for future implementation
+            }
+            csv_data.append(csv_row)
+
+        # Check if the file exists
+        file_exists = os.path.isfile(file_path)
 
         # Write data to CSV
-        with open(file_path, mode="w", newline="") as file:
+        with open(file_path, mode="a", newline="") as file:
             writer = csv.DictWriter(file, fieldnames=columns)
-            writer.writeheader()
-            writer.writerows(self.data_log)
+            
+            # Write header only if the file is new
+            if not file_exists:
+                writer.writeheader()
+            
+            # Write rows
+            writer.writerows(csv_data)
 
         print(f"Data saved to {file_path}")
+        self.data_log = []  # Clear the data log after saving
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
